@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Promocje — LIONESS (standalone)</title>
+<style>
+:root{
+  --bg1:#071a33; --bg2:#0f2b4a; --accent:#2bb673; --red:#e05252; --gold:#d4af37;
+  --panel:rgba(255,255,255,0.03); --muted:#c7d9ea;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#fff;-webkit-font-smoothing:antialiased}
+.container{max-width:1100px;margin:20px auto;padding:18px;display:grid;grid-template-columns:320px 1fr;gap:18px}
+.panel{background:var(--panel);padding:16px;border-radius:12px}
+.header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px}
+.brand{display:flex;flex-direction:column}
+.logo{font-size:22px;font-weight:800}
+.subtitle{font-size:12px;opacity:0.85}
+.controls{display:flex;gap:8px;align-items:center}
+.btn{background:#fff;color:#06243b;padding:8px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff}
+.search{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#fff;width:100%}
+.form-row{display:flex;gap:8px;margin-top:8px}
+.input, textarea, select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#fff;resize:none}
+.hint{font-size:13px;opacity:0.9;margin-top:8px}
+.table-wrap{background:rgba(255,255,255,0.02);padding:12px;border-radius:8px;max-height:65vh;overflow:auto}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:left;font-size:14px}
+.small{font-size:13px;opacity:0.9}
+.badge{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px}
+.empty{opacity:0.8;padding:18px;text-align:center}
+@media(max-width:900px){.container{grid-template-columns:1fr;padding:12px}}
+.actions{display:flex;gap:6px}
+.icon-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 8px;border-radius:8px;color:#fff;cursor:pointer}
+.note{margin-top:10px;font-size:13px;opacity:0.85}
+.footer{grid-column:1/-1;margin-top:12px;text-align:center;font-size:13px;opacity:0.7}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header panel">
+    <div class="brand">
+      <div class="logo">LIONESS — Promocje</div>
+      <div class="subtitle">Wersja: standalone od v3.9.5 (PL)</div>
+    </div>
+    <div class="controls">
+      <input id="global-search" class="search" placeholder="Szukaj tytuł lub opis..." />
+      <button id="btn-export" class="btn secondary">Eksportuj JSON</button>
+      <button id="btn-print" class="btn">Drukuj</button>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <h3 class="small">Dodaj / Edytuj promocję</h3>
+    <div class="form-row">
+      <input id="promo-title" class="input" placeholder="Tytuł promocji (np. -20% na wymianę opon)" />
+    </div>
+    <div class="form-row">
+      <textarea id="promo-desc" rows="3" class="input" placeholder="Opis promocji..."></textarea>
+    </div>
+    <div class="form-row">
+      <input id="promo-date" class="input" type="date"/>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button id="promo-save" class="btn">Zapisz</button>
+      <button id="promo-clear" class="btn secondary">Wyczyść</button>
+    </div>
+
+    <div class="note small">Kliknij "Edytuj" przy promocji, aby zmienić ją w formularzu. Wszystko zapisuje się lokalnie.</div>
+  </aside>
+
+  <main class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="badge">Lista promocji</div>
+      <div class="small">Łącznie: <span id="count">0</span></div>
+    </div>
+
+    <div class="table-wrap" id="promo-list-wrap">
+      <div id="empty" class="empty">Brak promocji. Dodaj pierwszą po lewej.</div>
+      <table id="promo-table" class="table" style="display:none">
+        <thead>
+          <tr><th>Tytuł</th><th>Opis</th><th>Data</th><th>Akcje</th></tr>
+        </thead>
+        <tbody id="promo-tbody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+      <button id="show-all" class="btn secondary">Pokaż wszystko</button>
+      <button id="clear-all" class="btn" style="background:rgba(224,82,82,0.95);color:#fff">Usuń wszystko</button>
+    </div>
+  </main>
+
+  <div class="footer">© 2025 LIONESS Auto Serwis — Promocje (standalone)</div>
+</div>
+
+<script>
+(function(){
+  const LS = 'lioness.promos.v1';
+  let state = JSON.parse(localStorage.getItem(LS) || 'null') || [];
+  let editingId = null;
+
+  const titleEl = document.getElementById('promo-title');
+  const descEl = document.getElementById('promo-desc');
+  const dateEl = document.getElementById('promo-date');
+  const saveBtn = document.getElementById('promo-save');
+  const clearBtn = document.getElementById('promo-clear');
+  const tbody = document.getElementById('promo-tbody');
+  const table = document.getElementById('promo-table');
+  const empty = document.getElementById('empty');
+  const countEl = document.getElementById('count');
+  const searchGlobal = document.getElementById('global-search');
+  const showAllBtn = document.getElementById('show-all');
+  const clearAllBtn = document.getElementById('clear-all');
+  const exportBtn = document.getElementById('btn-export');
+  const printBtn = document.getElementById('btn-print');
+
+  function saveState(){ localStorage.setItem(LS, JSON.stringify(state)); }
+
+  function renderList(filter=''){
+    const list = state.filter(p=>{
+      if(!filter) return true;
+      const f = filter.toLowerCase();
+      return p.title.toLowerCase().includes(f) || p.desc.toLowerCase().includes(f);
+    });
+    countEl.textContent = list.length;
+    if(list.length===0){ table.style.display='none'; empty.style.display='block'; return; }
+    empty.style.display='none'; table.style.display='table';
+    tbody.innerHTML='';
+    list.forEach(p=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${escapeHtml(p.title)}</td>
+                    <td>${escapeHtml(p.desc)}</td>
+                    <td>${escapeHtml(p.date)}</td>
+                    <td><div class="actions">
+                      <button class="icon-btn edit" data-id="${p.id}">Edytuj</button>
+                      <button class="icon-btn del" data-id="${p.id}">Usuń</button>
+                    </div></td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.edit').forEach(b=>b.addEventListener('click',e=>{
+      const id=Number(e.currentTarget.dataset.id);
+      startEdit(id);
+    }));
+    tbody.querySelectorAll('.del').forEach(b=>b.addEventListener('click',e=>{
+      const id=Number(e.currentTarget.dataset.id);
+      if(!confirm('Usunąć promocję?')) return;
+      state=state.filter(x=>x.id!==id);
+      saveState(); renderList(searchGlobal.value.trim());
+    }));
+  }
+
+  function addPromo(title,desc,date){
+    const item={id:Date.now(),title,desc,date};
+    state.push(item); saveState(); renderList(searchGlobal.value.trim());
+  }
+
+  function updatePromo(id,title,desc,date){
+    const idx=state.findIndex(x=>x.id===id);
+    if(idx===-1)return;
+    state[idx]={id,title,desc,date};
+    saveState(); renderList(searchGlobal.value.trim());
+  }
+
+  function startEdit(id){
+    const p=state.find(x=>x.id===id); if(!p)return;
+    editingId=id;
+    titleEl.value=p.title; descEl.value=p.desc; dateEl.value=p.date;
+    saveBtn.textContent='Zapisz zmiany';
+  }
+
+  function clearForm(){
+    editingId=null;
+    titleEl.value=''; descEl.value=''; dateEl.value='';
+    saveBtn.textContent='Zapisz';
+  }
+
+  saveBtn.addEventListener('click',()=>{
+    const title=titleEl.value.trim();
+    const desc=descEl.value.trim();
+    const date=dateEl.value;
+    if(!title||!desc){alert('Uzupełnij wszystkie pola.');return;}
+    if(editingId){ updatePromo(editingId,title,desc,date); clearForm(); }
+    else{ addPromo(title,desc,date); }
+  });
+
+  clearBtn.addEventListener('click',()=>clearForm());
+
+  searchGlobal.addEventListener('input',e=>renderList(e.target.value.trim()));
+  showAllBtn.addEventListener('click',()=>{searchGlobal.value='';renderList('');});
+  clearAllBtn.addEventListener('click',()=>{
+    if(!confirm('Usunąć wszystkie promocje?'))return;
+    state=[]; saveState(); renderList('');
+  });
+
+  exportBtn.addEventListener('click',()=>{
+    const data=JSON.stringify(state,null,2);
+    const blob=new Blob([data],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='lioness-promos-export.json';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  printBtn.addEventListener('click',()=>{
+    const w=window.open('','_blank');
+    let html='<html><head><title>Lista promocji</title></head><body style="font-family:Arial,Helvetica,sans-serif;color:#000">';
+    html+='<h2>Lista promocji — LIONESS</h2>';
+    if(state.length===0)html+='<div>Brak promocji</div>';else{
+      html+='<table border="1" cellpadding="8" cellspacing="0"><thead><tr><th>Tytuł</th><th>Opis</th><th>Data</th></tr></thead><tbody>';
+      state.forEach(p=>{html+=`<tr><td>${escapeHtml(p.title)}</td><td>${escapeHtml(p.desc)}</td><td>${escapeHtml(p.date)}</td></tr>`});
+      html+='</tbody></table>';
+    }
+    html+='</body></html>'; w.document.write(html); w.document.close(); w.focus(); w.print(); w.close();
+  });
+
+  function escapeHtml(s){if(s===null||s===undefined)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  renderList('');
+})();
+</script>
+</body>
+</html>
